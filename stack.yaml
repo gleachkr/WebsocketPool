@@ -1,0 +1,7 @@
+resolver: lts-8.11
+
+packages:
+- .
+
+extra-deps: 
+- aeson-1.1.1.0
