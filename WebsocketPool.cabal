@@ -2,12 +2,12 @@ name:                WebsocketPool
 version:             0.1.0.0
 -- synopsis:
 -- description:
-homepage:            https://github.com/githubuser/WebsocketPool#readme
-license:             BSD3
+homepage:            https://github.com/gleachkr/WebsocketPool#readme
+license:             LGPL
 license-file:        LICENSE
-author:              Author name here
-maintainer:          example@example.com
-copyright:           2017 Author name here
+author:              Graham Leach-Krouse
+maintainer:          gleachkr@gmail.com
+copyright:           2017 Graham Leach-Krouse
 category:            Web
 build-type:          Simple
 extra-source-files:  README.md
@@ -50,4 +50,4 @@ test-suite WebsocketPool-test
 
 source-repository head
   type:     git
-  location: https://github.com/githubuser/WebsocketPool
+  location: https://github.com/gleachkr/WebsocketPool
