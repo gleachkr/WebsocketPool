@@ -16,11 +16,11 @@ import qualified Data.ByteString.Lazy.Internal as Lazy
 --import qualified Text.Blaze.Html5 as B
 
 getWebsocketWatcherR :: (Yesod master, YesodWebsocketPool master) 
-    => HandlerT WebsocketPool (HandlerT master IO) Html
+    => SubHandlerFor WebsocketPool master Html
 getWebsocketWatcherR = do render <- getUrlRender
-                          let wsurl = "ws" <> dropWhile (/= ':') (render WebsocketWatcherR)
+                          let wsurl = "ws" <> dropWhile (/= ':') (render $ liftWebsocketPool WebsocketWatcherR)
                           webSockets updateBroadcaster
-                          lift $ defaultLayout $ do
+                          liftHandler $ defaultLayout $ do
                               toWidget $ updateReceiver wsurl
                               getWebsocketWatcherWidget
 
@@ -57,9 +57,9 @@ updateReceiver url = [julius|
     };
 |]
 
-updateBroadcaster :: Yesod master => WebSocketsT (HandlerT WebsocketPool (HandlerT master IO)) ()
-updateBroadcaster = do wsMonitor <- lift getWebsocketMonitor
-                       chanPool <- lift getChannelPool
+updateBroadcaster :: YesodWebsocketPool master => WebSocketsT (SubHandlerFor WebsocketPool master) ()
+updateBroadcaster = do wsMonitor <- lift (liftHandler getWebsocketMonitor)
+                       chanPool <- lift (liftHandler getChannelPool)
                        fromMonitor <- atomically (dupTChan wsMonitor)
                        WS.race_
                            (forever $ receiveDataMessageE >> atomically (writeTChan wsMonitor "ping"))
@@ -71,5 +71,5 @@ chanTableEncode :: MonadIO m => ChanTable -> m Lazy.ByteString
 chanTableEncode ct = liftIO $ encode <$> mapM checkRow ct
     where checkRow (WebsocketChannel _ roster _) = atomically $ readTVar roster 
 
-instance (Yesod master, YesodWebsocketPool master) => YesodSubDispatch WebsocketPool (HandlerT master IO) where
+instance (Yesod master, YesodWebsocketPool master) => YesodSubDispatch WebsocketPool master where
     yesodSubDispatch = $(mkYesodSubDispatch resourcesWebsocketPool)

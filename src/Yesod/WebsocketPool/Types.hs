@@ -48,8 +48,6 @@ type ChanTable = Map Text WebsocketChannel
 
 type ChannelPool = TVar ChanTable
 
-type WebsocketsSubHandler master = HandlerT WebsocketPool (HandlerT master IO)
-
 data WebsocketPool = WebsocketPool 
     { monitorChannel :: Channel --An server-only internal channel for monitoring the Channel Pool
     , channelPool :: ChannelPool --The pool of websocket channels
@@ -63,12 +61,13 @@ initWebsockets :: IO WebsocketPool
 initWebsockets = atomically $ WebsocketPool <$> newBroadcastTChan <*> newTVar mempty
 
 class YesodWebsocketPool app where
-        getWebsocketPool :: Monad m => HandlerT app m WebsocketPool
-        getWebsocketMonitor :: Monad m => HandlerT app m Channel
+        liftWebsocketPool :: Route WebsocketPool -> Route app
+        getWebsocketPool :: HandlerFor app WebsocketPool
+        getWebsocketMonitor :: HandlerFor app Channel
         getWebsocketMonitor = monitorChannel <$> getWebsocketPool
-        getChannelPool :: Monad m => HandlerT app m ChannelPool
+        getChannelPool :: HandlerFor app ChannelPool
         getChannelPool = channelPool <$> getWebsocketPool
-        getWebsocketWatcherWidget ::  WidgetT app IO ()
+        getWebsocketWatcherWidget :: WidgetFor app ()
         getWebsocketWatcherWidget = [whamlet|
                                     <h1> Open Websockets
                                     <ul#wsList>
@@ -76,16 +75,16 @@ class YesodWebsocketPool app where
 
 
 instance YesodWebsocketPool WebsocketPool where
-        getWebsocketPool = ask
+        getWebsocketPool = liftHandler getYesod
+        liftWebsocketPool = id
 
-getMonitorChannel :: (YesodWebsocketPool app, Monad m) => HandlerT app m Channel
+getMonitorChannel :: YesodWebsocketPool app => HandlerFor app Channel
 getMonitorChannel = monitorChannel <$> getWebsocketPool
 
-getAppChannels :: (YesodWebsocketPool app, MonadIO m) => HandlerT app m ChanTable
+getAppChannels :: YesodWebsocketPool app => HandlerFor app ChanTable
 getAppChannels = (channelPool <$> getWebsocketPool) >>= (atomically . readTVar) 
 
-connectToChannel ::(YesodWebsocketPool app, MonadIO m) =>
-    Text -> Text ->  HandlerT app m WebsocketConnection
+connectToChannel :: YesodWebsocketPool app => Text -> Text -> HandlerFor app WebsocketConnection
 connectToChannel txt name = do
         wsChannels <- getChannelPool
         wsMonitor <- getWebsocketMonitor
@@ -105,8 +104,8 @@ connectToChannel txt name = do
                               writeTChan wsMonitor $ "CREATED"
                               return $ WebsocketConnection (WebsocketOrigin name) wsc
 
-plugInWebsocketChannel :: (YesodWebsocketPool app, MonadBaseControl IO m, MonadCatch m, MonadIO m) =>
-     WebsocketConnection -> MsgHandler -> ErrHandler -> WebSocketsT (HandlerT app m) ()
+plugInWebsocketChannel :: YesodWebsocketPool app =>
+     WebsocketConnection -> MsgHandler -> ErrHandler -> WebSocketsT (HandlerFor app) ()
 plugInWebsocketChannel wscon msghandler errhandler = do
     wsChannels <- lift getChannelPool
     wsMonitor <- lift getWebsocketMonitor
