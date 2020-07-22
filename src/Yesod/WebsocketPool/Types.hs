@@ -14,12 +14,9 @@ import Yesod.WebSockets as WS
 import ClassyPrelude.Conduit
 import Data.Aeson (ToJSON)
 import Data.Map as M
-import Data.List as L
---import Data.Text
+import qualified Data.List as L
 import qualified Data.ByteString.Lazy.Internal as Lazy
---import Data.Conduit
-import GHC.Generics (Generic)
---import Control.Monad.Reader
+--import GHC.Generics (Generic)
 import Network.WebSockets  as NWS (ConnectionException(..))
 
 data WebsocketConnection = WebsocketConnection 
@@ -27,7 +24,10 @@ data WebsocketConnection = WebsocketConnection
                          , websocketChannel :: WebsocketChannel
                          } 
 
-data WebsocketOrigin = WebsocketOrigin { originName :: Text }
+data WebsocketOrigin = WebsocketOrigin 
+                     { originName :: Text -- name or identifier of the user originating the connection
+                     , originRoute :: Text -- route from which this connection originates
+                     }
     deriving (Eq,ToJSON,Generic)
 
 data WebsocketChannel = WebsocketChannel 
@@ -88,21 +88,24 @@ connectToChannel :: YesodWebsocketPool app => Text -> Text -> HandlerFor app Web
 connectToChannel txt name = do
         wsChannels <- getChannelPool
         wsMonitor <- getWebsocketMonitor
+        route <- getCurrentRoute >>= maybe (setMessage "couldn't retrieve route" >> notFound) pure
+        render <- getUrlRender
+        let wsurl = "ws" <> dropWhile (/= ':') (render route)
         atomically $ do 
            chanMap <- readTVar wsChannels
            case M.lookup txt chanMap of
                 Just wsc@(WebsocketChannel _ roster _) -> do 
-                        modifyTVar roster ((:) (WebsocketOrigin name)) 
+                        modifyTVar roster ((:) (WebsocketOrigin name wsurl)) 
                         writeTChan wsMonitor $ "JOINED"
-                        return $ WebsocketConnection (WebsocketOrigin name) wsc
+                        return $ WebsocketConnection (WebsocketOrigin name wsurl) wsc
                 Nothing -> do tchan <- newBroadcastTChan
-                              roster <- newTVar [WebsocketOrigin name] 
+                              roster <- newTVar [WebsocketOrigin name wsurl] 
                               let wsc = WebsocketChannel { keyOf = txt
                                                          , rosterOf = roster
                                                          , channelOf = tchan}
                               writeTVar wsChannels (M.insert txt wsc chanMap)
                               writeTChan wsMonitor $ "CREATED"
-                              return $ WebsocketConnection (WebsocketOrigin name) wsc
+                              return $ WebsocketConnection (WebsocketOrigin name wsurl) wsc
 
 plugInWebsocketChannel :: YesodWebsocketPool app =>
      WebsocketConnection -> MsgHandler -> ErrHandler -> WebSocketsT (HandlerFor app) ()
