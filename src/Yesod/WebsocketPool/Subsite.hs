@@ -45,14 +45,13 @@ updateReceiver url = [julius|
             wsList.appendChild(info);
             info.appendChild(chan);
             info.appendChild(connections);
-            for (channel in poolObj[key]) {
-                for (connection in channel) {
-                    var con = document.createElement("li");
-                    console.log(connection)
-                    con.innerHTML = poolObj[key][connection]["originName"];
-                    connections.appendChild(con);
-                };
-            };
+            poolObj[key].forEach(connection => {
+                var con = document.createElement("li");
+                console.log(connection)
+                con.innerHTML = connection.originName 
+                                + ":" + connection.originRoute;
+                connections.appendChild(con);
+            });
         };
     };
 |]
